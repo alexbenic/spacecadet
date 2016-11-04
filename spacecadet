@@ -1,0 +1,140 @@
+#!/bin/bash
+#
+# Utility script to generate/set/unset keybinding in X windows
+# systems and make them "spacecadet" complient.
+#
+# Dependencies:
+#   -xmodmap
+#   -xdotool
+#   -wmctrl
+#   -xcape (github.com/alols/xcape)
+#   -JSON.sh (github.com/dominictarr/JSON.sh)
+#
+# spacecadet 0.1
+# Usage: spacecadet <command> [<args>]
+#
+# Most useful commands:
+#   init        generate standard confing
+#   start       start xcape using config~/.spacecadet
+#   stop        remove keybindings and stop xcape
+#   restart     restart xcape
+set -euo pipefail
+#IFS="\n\t"
+
+#CONSTANTS
+readonly PROGNAME=$(basename "$0")
+readonly ARGS="${@:-0}"
+readonly DEPENDENCIES=(xmodmap xcape xdotool wmctrl JSON.sh)
+
+#COLORS
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly ORANGE='\33[0;33m'
+readonly NC='\033[0m'
+
+#DEPENDENCIES
+
+## Display message if there dependencie is not installed
+## Globals:
+##  None
+## Arguments:
+##  $1 -> name of dep
+## Returns;(
+#  None
+msg_install_dep() {
+    printf "Please install %s or make sure it is in your PATH.\n" "${1}"
+}
+
+## Check if all needed dependencies are installed
+## Globals:
+##  DEPENDENCIES
+## Arguments:
+##  None
+## Returns;(
+##  None
+check_dep() {
+    local dep
+    for dep in "${DEPENDENCIES[@]}"; do
+        if ! which "${dep}" > /dev/null; then
+            msg_install_dep "${dep}"
+            exit 1
+        fi
+    done
+}
+
+#USAGE
+
+## Print usage
+## Globals:
+##  None
+## Arguments:
+##  None
+## Returns;
+##  None
+print_usage() {
+    cat <<- EOF
+
+    usage : "${PROGNAME}" <command> [<args>]
+
+    Utility script to generate/set/unset keybinding in X windows
+    systems and make them 'spacecadet' complient.
+
+    COMMANDS:
+
+       init        generate standard configuration
+       start       start xcape using config ~/.spacecadet
+       stop        remove keybindings and stop xcape
+       restart     restart xcape
+
+EOF
+}
+
+## RESTART
+##
+## chick if xcape is running; kill all processes if running
+## Globals:
+##  None
+## Arguments:
+##  None
+## Returns;
+##  None
+do_kill() {
+    pgrep xcape > /dev/null
+    if [ $? -eq 0 ]
+    then
+        #printf "%s==>%s RESTARTING XCAPE\n" "${GREEN}" "${NC}"
+        for process in $( pgrep xcape ); do
+          kill "$process"
+        done
+    fi
+}
+
+## INIT XCAPE
+##
+## Change caps to esc; Mux CAPS with SHIFT; Mux SHIFT with Paren's
+## Globals:
+##  None
+## Arguments:
+##  None
+## Returns;
+##  None
+do_set() {
+    setxkbmap -option 'caps:ctrl_modifier'
+    xcape -e 'Caps_Lock=Escape;Control_L=Escape;Control_R=Escape'
+    xcape -t 300 -e 'Shift_L=Shift_L|parenleft;Shift_R=Shift_R|parenright'
+}
+
+
+## Main
+main() {
+
+  case "${ARGS[0]}" in
+  #    'generate') do_generate;;
+      'set' | '-s')      do_set;;
+      'restart' | '-r')  do_kill; do_set;;
+      'help' | '--help' | '-h' | '') usage;;
+      *)          print_usage; exit 1;;
+  esac
+}
+
+main

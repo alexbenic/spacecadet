@@ -6,11 +6,8 @@
 # Dependencies:
 #   -xmodmap
 #   -xdotool
-#   -wmctrl
-#   -xcape (github.com/alols/xcape)
-#   -JSON.sh (github.com/dominictarr/JSON.sh)
 #
-# spacecadet 0.1
+# spacecadet 0.2
 # Usage: spacecadet <command> [<args>]
 #
 # Most useful commands:
@@ -19,20 +16,19 @@
 #   stop        remove keybindings and stop xcape
 #   restart     restart xcape
 set -euo pipefail
-#IFS="\n\t"
 
 #CONSTANTS
 readonly PROGNAME=$(basename "$0")
-readonly ARGS="${@:-0}"
-readonly DEPENDENCIES=(xmodmap xcape xdotool wmctrl JSON.sh)
+readonly ARGS="${*:-0}"
+readonly DEPENDENCIES=(xmodmap xcape)
+
+VERBOSE=false
 
 #COLORS
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly ORANGE='\33[0;33m'
 readonly NC='\033[0m'
-
-#DEPENDENCIES
 
 ## Display message if there dependencie is not installed
 ## Globals:
@@ -42,7 +38,23 @@ readonly NC='\033[0m'
 ## Returns;(
 #  None
 msg_install_dep() {
-    printf "Please install %s or make sure it is in your PATH.\n" "${1}"
+    printf "Please install ${RED}%s${NC} or make sure it is in your PATH.\n" "${1}"
+}
+
+## LOG
+##
+## Util funcitons that logs to stdout and respects verbose flag
+## Globals:
+##  VERBOSE
+## Arguments:
+##  Log message
+## Returns:
+##  None
+log() {
+  if ${VERBOSE}
+  then
+    printf "${GREEN}==>${NC} %s\n" "$1"
+  fi
 }
 
 ## Check if all needed dependencies are installed
@@ -55,10 +67,11 @@ msg_install_dep() {
 check_dep() {
     local dep
     for dep in "${DEPENDENCIES[@]}"; do
-        if ! which "${dep}" > /dev/null; then
-            msg_install_dep "${dep}"
-            exit 1
-        fi
+      if ! which "${dep}" > /dev/null
+      then
+        msg_install_dep "${dep}"
+        exit 1
+      fi
     done
 }
 
@@ -81,9 +94,8 @@ print_usage() {
 
     COMMANDS:
 
-       init        generate standard configuration
-       start       start xcape using config ~/.spacecadet
-       stop        remove keybindings and stop xcape
+       start       start spacecadet
+       stop        stop spacecadet
        restart     restart xcape
 
 EOF
@@ -91,7 +103,7 @@ EOF
 
 ## RESTART
 ##
-## chick if xcape is running; kill all processes if running
+## check if xcape is running; kill all processes if running
 ## Globals:
 ##  None
 ## Arguments:
@@ -99,17 +111,31 @@ EOF
 ## Returns;
 ##  None
 do_kill() {
-    pgrep xcape > /dev/null
-    if [ $? -eq 0 ]
+    if [ "$(pgrep xcape > /dev/null)" != 0 ]
     then
-        #printf "%s==>%s RESTARTING XCAPE\n" "${GREEN}" "${NC}"
+        log "KILLING XCAPE"
+
         for process in $( pgrep xcape ); do
           kill "$process"
         done
     fi
 }
 
-## INIT XCAPE
+
+## VERBOSE
+##
+## Set global verbose variable to true
+## Globals:
+##  VERBOSE
+## Arguments:
+##  None
+## Returns;
+##  None
+do_verbose() {
+  VERBOSE=true
+}
+
+## START XCAPE
 ##
 ## Change caps to esc; Mux CAPS with SHIFT; Mux SHIFT with Paren's
 ## Globals:
@@ -118,10 +144,15 @@ do_kill() {
 ##  None
 ## Returns;
 ##  None
-do_set() {
+do_start() {
+    check_dep
+    log "STARTING SPACECADET"
+
     setxkbmap -option 'caps:ctrl_modifier'
+    xmodmap -e "keycode 107 = Super_R"
     xcape -e 'Caps_Lock=Escape;Control_L=Escape;Control_R=Escape'
     xcape -t 300 -e 'Shift_L=Shift_L|parenleft;Shift_R=Shift_R|parenright'
+    xmodmap -e "keycode 9 = Caps_Lock NoSymbol Caps_Lock"
 }
 
 
@@ -129,11 +160,13 @@ do_set() {
 main() {
 
   case "${ARGS[0]}" in
-  #    'generate') do_generate;;
-      'set' | '-s')      do_set;;
-      'restart' | '-r')  do_kill; do_set;;
+  #    'init')                       do_init;;
+      'start' | '-s')                do_start;;
+      'restart' | '-r')              do_kill; do_start;;
+      'stop')                        do_kill;;
       'help' | '--help' | '-h' | '') usage;;
-      *)          print_usage; exit 1;;
+      '-v')                          do_verbose;;
+      *)                             print_usage; exit 1;;
   esac
 }
 
